@@ -1,0 +1,107 @@
+version: '3.7'
+
+
+services:
+
+  dns:
+    image: sameersbn/bind:latest
+    container_name: dns
+    environment:
+      - ROOT_PASSWORD=secretpassword
+    networks:
+      - internal_net
+    ports:
+      - "443:443/udp"
+    volumes:
+      - ./bind/config:/etc/bind
+
+  dhcp:
+    image: networkboot/dhcpd
+    container_name: dhcp
+    environment:
+      - DHCPD_CONF=/etc/dhcp/dhcpd.conf
+    networks:
+      - internal_net
+    ports:
+      - "67:67/udp"
+    volumes:
+      - ./dhcp/config:/etc/dhcp
+      
+  firewall:
+    image: debian
+    container_name: firewall
+    command: >
+      bash -c "apt-get update && apt-get install -y iptables &&
+               iptables -A INPUT -p tcp --dport 8080 -j ACCEPT &&
+               iptables -A INPUT -j DROP"
+    networks:
+      - internal_net
+    volumes:
+      - ./iptables/config:/etc/iptables
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+
+
+  ldap:
+    image: osixia/openldap
+    container_name: ldap
+    environment:
+      - LDAP_ORGANISATION="MyCompany"
+      - LDAP_DOMAIN="mycompany.local"
+      - LDAP_ADMIN_PASSWORD="admin"
+    networks:
+      - internal_net
+    ports:
+      - "389:389"
+    volumes:
+      - ./ldap/data:/var/lib/ldap
+
+  samba:
+    image: dperson/samba
+    container_name: samba
+    environment:
+      - SAMBA_PASSWORD=secretpassword
+    networks:
+      - internal_net
+    ports:
+      - "8445:445"
+    volumes:
+      - ./samba/config:/etc/samba
+      - ./samba/share:/srv/samba
+
+  ftp:
+    image: fauria/vsftpd
+    container_name: ftp
+    environment:
+      - FTP_USER=user
+      - FTP_PASS=secretpassword
+    networks:
+      - internal_net
+    ports:
+      - "21:21"
+
+  web:
+    image: nginx:latest
+    container_name: web
+    networks:
+      - internal_net
+    volumes:
+      - ./nginx/html:/usr/share/nginx/html
+    ports:
+      - "8080:8080"
+
+  router:
+    image: alpine:latest
+    container_name: router
+    command: "sh -c 'while true; do sleep 3600; done'"
+    networks:
+      - internal_net
+      - external_net
+
+networks:
+  internal_net:
+    driver: bridge
+  external_net:
+    driver: bridge
+
